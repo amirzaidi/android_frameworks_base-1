@@ -95,9 +95,7 @@ public class VolumeDialogComponent implements VolumeComponent, TunerService.Tuna
     }
 
     private VolumeDialog createDefault() {
-        /* ++ [START] oneplus feature */
-        VolumeDialogImpl impl = new VolumeDialogImpl(mContext, mSysui);
-        /* -- [START] oneplus feature */
+        VolumeDialogImpl impl = new VolumeDialogImpl(mContext);
         impl.setStreamImportant(AudioManager.STREAM_ALARM, true);
         impl.setStreamImportant(AudioManager.STREAM_SYSTEM, false);
         impl.setAutomute(true);
@@ -185,11 +183,6 @@ public class VolumeDialogComponent implements VolumeComponent, TunerService.Tuna
 
     private final VolumeDialogImpl.Callback mVolumeDialogCallback = new VolumeDialogImpl.Callback() {
         @Override
-        public void onSettingsClicked() {
-
-        }
-
-        @Override
         public void onZenSettingsClicked() {
             startSettings(ZenModePanel.ZEN_SETTINGS);
         }
@@ -199,11 +192,5 @@ public class VolumeDialogComponent implements VolumeComponent, TunerService.Tuna
             startSettings(ZenModePanel.ZEN_PRIORITY_SETTINGS);
         }
     };
-
-    /* ++ [START] oneplus feature */
-    public void showVolumeDialogForTriKey() {
-        mDialog.show(Events.SHOW_REASON_VOLUME_CHANGED);
-    }
-    /* [END] oneplus feature */
 
 }

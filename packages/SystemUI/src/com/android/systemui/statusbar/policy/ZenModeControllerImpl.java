@@ -32,7 +32,6 @@ import android.os.UserHandle;
 import android.os.UserManager;
 import android.provider.Settings.Global;
 import android.provider.Settings.Secure;
-import android.provider.Settings;
 import android.service.notification.Condition;
 import android.service.notification.IConditionListener;
 import android.service.notification.ZenModeConfig;
@@ -41,8 +40,6 @@ import android.support.annotation.VisibleForTesting;
 import android.util.Log;
 import android.util.Slog;
 
-import com.android.keyguard.KeyguardUpdateMonitorCallback;
-import com.android.keyguard.KeyguardUpdateMonitor;
 import com.android.systemui.qs.GlobalSetting;
 import com.android.systemui.settings.CurrentUserTracker;
 import com.android.systemui.util.Utils;
@@ -50,7 +47,6 @@ import com.android.systemui.util.Utils;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Objects;
-import com.android.systemui.volume.Util;
 
 /** Platform implementation of the zen mode controller. **/
 public class ZenModeControllerImpl extends CurrentUserTracker implements ZenModeController {
@@ -60,7 +56,6 @@ public class ZenModeControllerImpl extends CurrentUserTracker implements ZenMode
     private final ArrayList<Callback> mCallbacks = new ArrayList<Callback>();
     private final Context mContext;
     private final GlobalSetting mModeSetting;
-    private final GlobalSetting mThreekeySetting;
     private final GlobalSetting mConfigSetting;
     private final NotificationManager mNoMan;
     private final LinkedHashMap<Uri, Condition> mConditions = new LinkedHashMap<Uri, Condition>();
@@ -73,21 +68,6 @@ public class ZenModeControllerImpl extends CurrentUserTracker implements ZenMode
     private boolean mRegistered;
     private ZenModeConfig mConfig;
 
-    //+ [RAINN-2884] 三段式按键切换到静音模式后调节音量显示的还是响铃模式界面
-    private final SettingObserver mSettingObserver = new SettingObserver();
-    private int mVibrateWhenMute = 0;
-    private KeyguardUpdateMonitorCallback mMonitorCallback = new KeyguardUpdateMonitorCallback() {
-        @Override
-        public void onSystemReady() {
-            boolean change = false;
-            mVibrateWhenMute = Settings.System.getIntForUser(mContext.getContentResolver(), Settings.System.VIBRATE_WHEN_MUTE, 0, KeyguardUpdateMonitor.getCurrentUser());
-            int zen = Settings.Global.getInt(mContext.getContentResolver(),
-                    Settings.Global.ZEN_MODE, Settings.Global.ZEN_MODE_OFF);
-            fireZenChanged(zen);
-        }
-    };
-    //- [RAINN-2884] 三段式按键切换到静音模式后调节音量显示的还是响铃模式界面
-
     public ZenModeControllerImpl(Context context, Handler handler) {
         super(context);
         mContext = context;
@@ -97,14 +77,6 @@ public class ZenModeControllerImpl extends CurrentUserTracker implements ZenMode
                 fireZenChanged(value);
             }
         };
-        //+ [RAINN-4721] since zenmode design change after androidN, sync zenmode to threeKeyStatus
-        mThreekeySetting = new GlobalSetting(mContext, handler, Global.THREE_KEY_MODE) {
-            @Override
-            protected void handleValueChanged(int value) {
-                fireZenChanged(mModeSetting.getValue());
-            }
-        };
-        //- [RAINN-4721] since zenmode design change after androidN, sync zenmode to threeKeyStatus
         mConfigSetting = new GlobalSetting(mContext, handler, Global.ZEN_MODE_CONFIG_ETAG) {
             @Override
             protected void handleValueChanged(int value) {
@@ -114,19 +86,12 @@ public class ZenModeControllerImpl extends CurrentUserTracker implements ZenMode
         mNoMan = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         mConfig = mNoMan.getZenModeConfig();
         mModeSetting.setListening(true);
-        mThreekeySetting.setListening(true);
         mConfigSetting.setListening(true);
         mAlarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         mSetupObserver = new SetupObserver(handler);
         mSetupObserver.register();
         mUserManager = context.getSystemService(UserManager.class);
         startTracking();
-
-        //+ [RAINN-2884] 三段式按键切换到静音模式后调节音量显示的还是响铃模式界面
-        mContext.getContentResolver().registerContentObserver(
-                Settings.System.getUriFor(Settings.System.VIBRATE_WHEN_MUTE), false, mSettingObserver, UserHandle.USER_ALL);
-        mVibrateWhenMute = Settings.System.getIntForUser(mContext.getContentResolver(), Settings.System.VIBRATE_WHEN_MUTE, 0, KeyguardUpdateMonitor.getCurrentUser());
-        //- [RAINN-2884] 三段式按键切换到静音模式后调节音量显示的还是响铃模式界面
     }
 
     @Override
@@ -138,11 +103,6 @@ public class ZenModeControllerImpl extends CurrentUserTracker implements ZenMode
     @Override
     public void addCallback(Callback callback) {
         mCallbacks.add(callback);
-        //+ [RNMR-1906] must update first time after callback
-        if (callback != null) {
-            callback.onZenChanged(mZenMode);
-        }
-        //- [RNMR-1906] must update first time after callback
     }
 
     @Override
@@ -152,10 +112,7 @@ public class ZenModeControllerImpl extends CurrentUserTracker implements ZenMode
 
     @Override
     public int getZen() {
-        //+ oneplus porting
-//        return mModeSetting.getValue();
-        return mZenMode;
-        //+ oneplus porting
+        return mModeSetting.getValue();
     }
 
     @Override
@@ -195,9 +152,6 @@ public class ZenModeControllerImpl extends CurrentUserTracker implements ZenMode
         mContext.registerReceiverAsUser(mReceiver, new UserHandle(mUserId), filter, null, null);
         mRegistered = true;
         mSetupObserver.register();
-        //+ [RAINN-2884] 三段式按键切换到静音模式后调节音量显示的还是响铃模式界面
-        KeyguardUpdateMonitor.getInstance(mContext).registerCallback(mMonitorCallback);
-        //- [RAINN-2884] 三段式按键切换到静音模式后调节音量显示的还是响铃模式界面
     }
 
     @Override
@@ -224,22 +178,8 @@ public class ZenModeControllerImpl extends CurrentUserTracker implements ZenMode
         Utils.safeForeach(mCallbacks, c -> c.onEffectsSupressorChanged());
     }
 
-    private int mZenMode = Global.ZEN_MODE_OFF;
-
     private void fireZenChanged(int zen) {
-        //+ oneplus porting
-        //+ [RAINN-2884] 三段式按键切换到静音模式后调节音量显示的还是响铃模式界面
-        int threeKeyStatus = Util.getThreeKeyStatus(mContext);
-        final int newZen = Util.getCorrectZenMode(zen, threeKeyStatus, mVibrateWhenMute);
-        //- [RAINN-2884] 三段式按键切换到静音模式后调节音量显示的还是响铃模式界面
-        //+ [RNMR-1906] must update first time after callback
-        mZenMode = newZen;
-        //- [RNMR-1906] must update first time after callback
-
-        Log.i(TAG, " fireZenChanged zenMode:" + newZen);
-        //Utils.safeForeach(mCallbacks, c -> c.onZenChanged(zen));
-        Utils.safeForeach(mCallbacks, c -> c.onZenChanged(newZen));
-        //- oneplus porting
+        Utils.safeForeach(mCallbacks, c -> c.onZenChanged(zen));
     }
 
     private void fireZenAvailableChanged(boolean available) {
@@ -337,23 +277,6 @@ public class ZenModeControllerImpl extends CurrentUserTracker implements ZenMode
                     || Secure.getUriFor(Secure.USER_SETUP_COMPLETE).equals(uri)) {
                 fireZenAvailableChanged(isZenAvailable());
             }
-        }
-    }
-
-
-    //+ [RAINN-2884] 三段式按键切换到静音模式后调节音量显示的还是响铃模式界面
-    private final class SettingObserver extends ContentObserver {
-        public SettingObserver() {
-            super(new Handler());
-        }
-
-        @Override
-        public void onChange(boolean selfChange, Uri uri) {
-            super.onChange(selfChange, uri);
-            //+ MOOS-883
-            mVibrateWhenMute = Settings.System.getIntForUser(mContext.getContentResolver(), Settings.System.VIBRATE_WHEN_MUTE, 0, KeyguardUpdateMonitor.getCurrentUser());
-            //- MOOS-883
-            Log.i(TAG, " SettingObserver mVibrateWhenMute:" + mVibrateWhenMute);
         }
     }
 }

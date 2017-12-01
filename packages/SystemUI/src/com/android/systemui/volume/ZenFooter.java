@@ -18,7 +18,6 @@ package com.android.systemui.volume;
 import android.animation.LayoutTransition;
 import android.animation.ValueAnimator;
 import android.content.Context;
-import android.content.Intent;
 import android.provider.Settings.Global;
 import android.service.notification.ZenModeConfig;
 import android.transition.AutoTransition;
@@ -30,12 +29,8 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-import com.android.keyguard.KeyguardUpdateMonitor;
 import com.android.systemui.Prefs;
 import com.android.systemui.R;
-import com.android.systemui.SystemUI;
-import com.android.systemui.plugins.VolumeDialog;
-import com.android.systemui.statusbar.phone.StatusBar;
 import com.android.systemui.statusbar.policy.ZenModeController;
 
 import java.util.Objects;
@@ -50,9 +45,6 @@ public class ZenFooter extends LinearLayout {
     private final ConfigurableTexts mConfigurableTexts;
 
     private ImageView mIcon;
-    /* ++ [START] oneplus feature */
-    private ImageView mSettingIcon;
-    /* ++ [START] oneplus feature */
     private TextView mSummaryLine1;
     private TextView mSummaryLine2;
     private TextView mEndNowButton;
@@ -62,10 +54,6 @@ public class ZenFooter extends LinearLayout {
     private int mZen = -1;
     private ZenModeConfig mConfig;
     private ZenModeController mController;
-    /* ++ [START] oneplus feature */
-    private SystemUI mSysui;
-    private VolumeDialogImpl mVolumeDialog;
-    /* ++ [START] oneplus feature */
 
     public ZenFooter(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -80,17 +68,9 @@ public class ZenFooter extends LinearLayout {
     protected void onFinishInflate() {
         super.onFinishInflate();
         mIcon = findViewById(R.id.volume_zen_icon);
-        /* ++[START] oneplus feature */
-        mSettingIcon = (ImageView) findViewById(R.id.volume_zen_settings);
-        /* [END] oneplus feature */
         mSummaryLine1 = findViewById(R.id.volume_zen_summary_line_1);
-        //RNMR-97: Doesn't need this line
-//        mSummaryLine2 = (TextView) findViewById(R.id.volume_zen_summary_line_2);
-        /* ++ [START] oneplus feature */
-        /*
-        mEndNowButton = (TextView) findViewById(R.id.volume_zen_end_now);
-        */
-        /* ++ [START] oneplus feature */
+        mSummaryLine2 = findViewById(R.id.volume_zen_summary_line_2);
+        mEndNowButton = findViewById(R.id.volume_zen_end_now);
         mZenIntroduction = findViewById(R.id.zen_introduction);
         mZenIntroductionMessage = findViewById(R.id.zen_introduction_message);
         mConfigurableTexts.add(mZenIntroductionMessage, R.string.zen_alarms_introduction);
@@ -103,18 +83,11 @@ public class ZenFooter extends LinearLayout {
         });
         Util.setVisOrGone(mZenIntroduction, shouldShowIntroduction());
         mConfigurableTexts.add(mSummaryLine1);
-        /* ++ [START] oneplus feature */
-        //RNMR-97: Doesn't need this line
-//        mConfigurableTexts.add(mSummaryLine2);
-//        mConfigurableTexts.add(mEndNowButton, R.string.volume_zen_end_now);
-           /* ++ [START] oneplus feature */
+        mConfigurableTexts.add(mSummaryLine2);
+        mConfigurableTexts.add(mEndNowButton, R.string.volume_zen_end_now);
     }
 
-    //public void init(final ZenModeController controller) {
-    /* ++ [START] oneplus feature */
-    public void init(SystemUI sysui, VolumeDialogImpl volumeDialog, final ZenModeController controller) {
-    /* ++ [START] oneplus feature */
-        /*
+    public void init(final ZenModeController controller) {
         mEndNowButton.setOnClickListener(new OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -122,26 +95,9 @@ public class ZenFooter extends LinearLayout {
                 controller.setZen(Global.ZEN_MODE_OFF, null, TAG);
             }
         });
-       */
         mZen = controller.getZen();
         mConfig = controller.getConfig();
         mController = controller;
-
-        /* ++[START] oneplus feature */
-        mSysui = sysui;
-        mVolumeDialog = volumeDialog;
-        mSettingIcon.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick (View v) {
-                    Intent intent = isZenPriority() ? ZenModePanel.ZEN_PRIORITY_SETTINGS
-                            : isZenAlarms() ? ZenModePanel.ZEN_SILENT_MODE_SETTINGS
-                            : ZenModePanel.ZEN_RING_MODE_SETTINGS;
-                    mSysui.getComponent(StatusBar.class).startActivityDismissingKeyguard(
-                        intent , true , true);
-                    mVolumeDialog.dismissWaitForRipple(Events.DISMISS_REASON_SETTINGS_CLICKED);
-                }
-            });
-        /* ++[END] oneplus feature */
         mController.addCallback(mZenCallback);
         update();
         updateIntroduction();
@@ -182,7 +138,6 @@ public class ZenFooter extends LinearLayout {
     }
 
     public void update() {
-        /*
         mIcon.setImageResource(isZenNone() ? R.drawable.ic_dnd_total_silence : R.drawable.ic_dnd);
         final String line1 =
                 isZenPriority() ? mContext.getString(R.string.interruption_level_priority)
@@ -190,29 +145,15 @@ public class ZenFooter extends LinearLayout {
                 : isZenNone() ? mContext.getString(R.string.interruption_level_none)
                 : null;
         Util.setText(mSummaryLine1, line1);
-        */
-        //final CharSequence line2 = ZenModeConfig.getConditionSummary(mContext, mConfig,
-        //                        mController.getCurrentUser(), true /*shortVersion*/);
-        //Util.setText(mSummaryLine2, line2);
 
-        /* ++[START] oneplus feature */
-        mIcon.setImageResource(isZenPriority() ? R.drawable.ic_volume_footer_no_disturb
-                : isZenAlarms() ? R.drawable.ic_volume_footer_slient
-                : R.drawable.ic_volume_footer_ring);
-        final String line1 =
-                isZenPriority() ? mContext.getString(R.string.volume_footer_no_disturb)
-                        : isZenAlarms() ? mContext.getString(R.string.volume_footer_slient)
-                       : mContext.getString(R.string.volume_footer_ring);
-        Util.setText(mSummaryLine1, line1);
-        /* [END] oneplus feature */
+        final CharSequence line2 = ZenModeConfig.getConditionSummary(mContext, mConfig,
+                                mController.getCurrentUser(), true /*shortVersion*/);
+        Util.setText(mSummaryLine2, line2);
     }
     public boolean shouldShowIntroduction() {
-                //+ [OPSystemUI] sysnc N design, doesn't show Introduction
-//        final boolean confirmed =  Prefs.getBoolean(mContext,
-//                Prefs.Key.DND_CONFIRMED_ALARM_INTRODUCTION, false);
-//        return !confirmed && isZenAlarms();
-       return false;
-        //- [OPSystemUI] sysnc N design, doesn't show Introduction
+        final boolean confirmed =  Prefs.getBoolean(mContext,
+                Prefs.Key.DND_CONFIRMED_ALARM_INTRODUCTION, false);
+        return !confirmed && isZenAlarms();
     }
 
     public void updateIntroduction() {
@@ -233,16 +174,4 @@ public class ZenFooter extends LinearLayout {
             setConfig(config);
         }
     };
-
-    @Override
-    protected void onAttachedToWindow() {
-        if(!KeyguardUpdateMonitor.getInstance(mContext).isDeviceProvisioned()) {
-            android.util.Log.i("ZenFooter","disable setting button in ZenFooter because device is not provisioned!");
-            mSettingIcon.setVisibility(View.INVISIBLE);
-        }else{
-            mSettingIcon.setVisibility(View.VISIBLE);
-        }
-        super.onAttachedToWindow();
-    }
-
 }
