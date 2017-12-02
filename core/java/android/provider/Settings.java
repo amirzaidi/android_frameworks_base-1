@@ -3244,6 +3244,27 @@ public final class Settings {
         private static final Validator VIBRATE_IN_SILENT_VALIDATOR = sBooleanValidator;
 
         /**
+         * Whether to allow alarms to ring in the top position of the alert slider.
+         */
+        public static final String THREEKEY_UP_ALLOW_ALARMS = "threekey_up_allow_alarms";
+
+        private static final Validator THREEKEY_UP_ALLOW_ALARMS_VALIDATOR = sBooleanValidator;
+
+        /**
+         * Whether the alert slider will switch to vibrate when moved to the middle.
+         */
+        public static final String THREEKEY_MIDDLE_START_VIBRATE = "threekey_middle_start_vibrate";
+
+        private static final Validator THREEKEY_MIDDLE_START_VIBRATE_VALIDATOR = sBooleanValidator;
+
+        /**
+         * Whether the alert slider will switch to priority mode when moved to the middle
+         */
+        public static final String THREEKEY_MIDDLE_START_PRIORITY = "threekey_middle_start_priority";
+
+        private static final Validator THREEKEY_MIDDLE_START_PRIORITY_VALIDATOR = sBooleanValidator;
+
+        /**
          * The mapping of stream type (integer) to its setting.
          *
          * @removed  Not used by anything since API 2.
@@ -3945,6 +3966,9 @@ public final class Settings {
             SIP_RECEIVE_CALLS,
             POINTER_SPEED,
             VIBRATE_WHEN_RINGING,
+            THREEKEY_UP_ALLOW_ALARMS,
+            THREEKEY_MIDDLE_START_VIBRATE,
+            THREEKEY_MIDDLE_START_PRIORITY,
             RINGTONE,
             LOCK_TO_APP_ENABLED,
             NOTIFICATION_SOUND,
@@ -4003,6 +4027,9 @@ public final class Settings {
             PUBLIC_SETTINGS.add(HAPTIC_FEEDBACK_ENABLED);
             PUBLIC_SETTINGS.add(SHOW_WEB_SUGGESTIONS);
             PUBLIC_SETTINGS.add(VIBRATE_WHEN_RINGING);
+            PUBLIC_SETTINGS.add(THREEKEY_UP_ALLOW_ALARMS);
+            PUBLIC_SETTINGS.add(THREEKEY_MIDDLE_START_VIBRATE);
+            PUBLIC_SETTINGS.add(THREEKEY_MIDDLE_START_PRIORITY);
         }
 
         /**
@@ -4100,6 +4127,9 @@ public final class Settings {
             VALIDATORS.put(MASTER_MONO, MASTER_MONO_VALIDATOR);
             VALIDATORS.put(NOTIFICATIONS_USE_RING_VOLUME, NOTIFICATIONS_USE_RING_VOLUME_VALIDATOR);
             VALIDATORS.put(VIBRATE_IN_SILENT, VIBRATE_IN_SILENT_VALIDATOR);
+            VALIDATORS.put(THREEKEY_UP_ALLOW_ALARMS, THREEKEY_UP_ALLOW_ALARMS_VALIDATOR);
+            VALIDATORS.put(THREEKEY_MIDDLE_START_VIBRATE, THREEKEY_MIDDLE_START_VIBRATE_VALIDATOR);
+            VALIDATORS.put(THREEKEY_MIDDLE_START_PRIORITY, THREEKEY_MIDDLE_START_PRIORITY_VALIDATOR);
             VALIDATORS.put(MEDIA_BUTTON_RECEIVER, MEDIA_BUTTON_RECEIVER_VALIDATOR);
             VALIDATORS.put(HIDE_ROTATION_LOCK_TOGGLE_FOR_ACCESSIBILITY,
                     HIDE_ROTATION_LOCK_TOGGLE_FOR_ACCESSIBILITY_VALIDATOR);
