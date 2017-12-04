@@ -1,19 +1,23 @@
 package com.oneplus;
 
-import android.content.IntentFilter;
+import android.app.NotificationManager;
+import android.content.Context;
 import android.content.BroadcastReceiver;
 import android.content.Intent;
-import android.os.UserHandle;
-import android.util.Slog;
-import android.content.Context;
-import android.os.Vibrator;
+import android.content.IntentFilter;
+import android.database.ContentObserver;
 import android.media.AudioManager;
-import android.app.NotificationManager;
+import android.net.Uri;
+import android.os.Handler;
+import android.os.UserHandle;
+import android.os.Vibrator;
+import android.os.VibrationEffect;
+import android.os.UserHandle;
 import android.provider.Settings;
 
 import com.threekey.Actions;
 
-public class ThreeKey {
+public class ThreeKey extends ContentObserver {
     private static final String TAG = "ThreeKey";
 
     private static final String ACTION_THREE_KEY = Actions.TRI_STATE_KEY_INTENT;
@@ -28,103 +32,141 @@ public class ThreeKey {
     private NotificationManager mNotificationManager;
     private AudioManager mAudioManager;
 
-    private boolean mUpAllowAlarms = false;
-    private boolean mMiddleStartPriority = true;
-    private boolean mMiddleStartVibrate = false;
-
     private int mThreeKeyMode;
 
+    private boolean mAcceptZenChange = false;
+    private boolean mUserChange = false;
+
     public ThreeKey(Context context, int switchState) {
+        super(new Handler());
+
         mContext = context;
         mVibrator = (Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
         mNotificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         mAudioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
 
-        mThreeKeyMode = switchState;
-        setSwitchState();
+        setKeyMode(switchState);
 
-        IntentFilter intentFilter = new IntentFilter(ACTION_THREE_KEY);
-        context.registerReceiverAsUser(new BroadcastReceiver() {
+        context.getContentResolver().registerContentObserver(Settings.Global.getUriFor(Settings.Global.ZEN_MODE), false, this);
+        context.getContentResolver().registerContentObserver(Settings.System.getUriFor(Settings.System.THREEKEY_UP_ALLOW_ALARMS), false, new ContentObserver(new Handler()) {
             @Override
-            public synchronized void onReceive(Context context, Intent intent) {
-                if (intent.getAction().equals(ACTION_THREE_KEY)) {
-                    mThreeKeyMode = intent.getIntExtra(ACTION_THREE_KEY_EXTRA, -1);
-                    setSwitchState();
+            public void onChange(boolean selfChange, Uri uri) {
+                super.onChange(selfChange, uri);
+                if (isMuted()) {
+                    setUp();
                 }
             }
-        }, UserHandle.ALL, intentFilter, null, null);
+        }, UserHandle.USER_ALL);
+
+        context.registerReceiverAsUser(new BroadcastReceiver() {
+            //3Key has moved
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                mUserChange = true;
+                setKeyMode(intent.getIntExtra(ACTION_THREE_KEY_EXTRA, -1));
+            }
+        }, UserHandle.ALL, new IntentFilter(ACTION_THREE_KEY), null, null);
     }
 
-    private void setSwitchState() {
-        switch (mThreeKeyMode) {
-            case SWITCH_STATE_UP:
-                setUp();
-                break;
-            case SWITCH_STATE_MIDDLE:
-                setMiddle();
-                break;
-            case SWITCH_STATE_DOWN:
-                setDown();
-                break;
-            default:
-                Slog.e(TAG, "Invalid switchState");
-                return;
-        }
-
-        mVibrator.vibrate(100);
+    public boolean isMuted() {
+        return mThreeKeyMode == SWITCH_STATE_UP;
     }
 
     public boolean isUnlocked()  {
         return mThreeKeyMode == SWITCH_STATE_MIDDLE;
     }
 
+    public boolean isLoud() {
+        return mThreeKeyMode == SWITCH_STATE_DOWN;
+    }
+
+    private void setKeyMode(int threeKeyMode) {
+        mThreeKeyMode = threeKeyMode;
+        if (isMuted()) {
+            setUp();
+        } else if (isUnlocked()) {
+            setMiddle();
+        } else if (isLoud()) {
+            setBottom();
+        }
+    }
+
     private void setUp() {
-        android.util.Log.w(TAG, "State switch up");
+        boolean upAllowAlarms = 0 != Settings.System.getIntForUser(
+            mContext.getContentResolver(),
+            Settings.System.THREEKEY_UP_ALLOW_ALARMS,
+            0,
+            UserHandle.USER_CURRENT);
 
-        //Lock into silence
-        int mode = mUpAllowAlarms ?
+        setZenMode(upAllowAlarms ?
             Settings.Global.ZEN_MODE_ALARMS :
-            Settings.Global.ZEN_MODE_NO_INTERRUPTIONS;
-
-        setZenMode(mode);
+            Settings.Global.ZEN_MODE_NO_INTERRUPTIONS);
     }
 
     private void setMiddle() {
-        android.util.Log.w(TAG, "State switch middle");
+        boolean middleStartPriority = 0 != Settings.System.getIntForUser(
+            mContext.getContentResolver(),
+            Settings.System.THREEKEY_MIDDLE_START_PRIORITY,
+            0,
+            UserHandle.USER_CURRENT);
 
-        //Go to vibrate or ring depending on the setting
-        if (mMiddleStartVibrate) {
-            mAudioManager.setStreamVolume(AudioManager.STREAM_RING, 0, 0);
-        } else {
-            unmuteFromVibrate();
-        }
-
-        //Set to the default from settings, unlocked
-        int mode = mMiddleStartPriority ?
+        setZenMode(middleStartPriority ?
             Settings.Global.ZEN_MODE_IMPORTANT_INTERRUPTIONS :
-            Settings.Global.ZEN_MODE_OFF;
+            Settings.Global.ZEN_MODE_OFF);
 
-        setZenMode(mode);
-
-        //switch to automatic rules here
+        //Switch to automatic rules here
     }
 
-    private void setDown() {
-        android.util.Log.w(TAG, "State switch down");
-
-        //Lock inro ring
+    private void setBottom() {
         setZenMode(Settings.Global.ZEN_MODE_OFF);
-
-        //Max out ring volume
-        unmuteFromVibrate();
     }
 
     private void setZenMode(int mode) {
-        mNotificationManager.setZenMode(mode, null, TAG);
-        Settings.Global.putInt(mContext.getContentResolver(), Settings.Global.ZEN_MODE, mode);
+        if (Settings.Global.getInt(mContext.getContentResolver(), Settings.Global.ZEN_MODE, -1) == mode) {
+            setRingMode();
+        } else {
+            mAcceptZenChange = true;        
+            mNotificationManager.setZenMode(mode, null, TAG);
+            Settings.Global.putInt(mContext.getContentResolver(), Settings.Global.ZEN_MODE, mode);
+        }
     }
 
-    private void unmuteFromVibrate() {
-        mAudioManager.adjustStreamVolume(AudioManager.STREAM_RING, AudioManager.ADJUST_UNMUTE, 0);
+    //On zen changed
+    @Override
+    public void onChange(boolean selfChange, Uri uri) {
+        super.onChange(selfChange, uri);
+        if (mAcceptZenChange) {
+            mAcceptZenChange = false;
+            setRingMode(); //Use as async callback
+        } else if (isMuted()) {
+            setUp();
+        } else if (isLoud()) {
+            setBottom();
+        }
+    }
+
+    //Always gets called at the end of a zen change
+    private void setRingMode() {
+        if (mUserChange) { //Only do this when the 3Key has moved
+            mUserChange = false;
+
+            if (isUnlocked()) {
+                boolean mMiddleRing = 0 == Settings.System.getIntForUser(
+                    mContext.getContentResolver(),
+                    Settings.System.THREEKEY_MIDDLE_START_VIBRATE,
+                    0,
+                    UserHandle.USER_CURRENT);
+
+                if (mMiddleRing) {
+                    mAudioManager.adjustStreamVolume(AudioManager.STREAM_RING, AudioManager.ADJUST_UNMUTE, 0);
+                } else {
+                    mAudioManager.setStreamVolume(AudioManager.STREAM_RING, 0, 0);
+                }
+            } else if (isLoud()) {
+                mAudioManager.setStreamVolume(AudioManager.STREAM_RING, mAudioManager.getStreamMaxVolume(AudioManager.STREAM_RING), 0);
+            }
+
+            mVibrator.vibrate(VibrationEffect.createOneShot(50, 255));
+        }
     }
 }
